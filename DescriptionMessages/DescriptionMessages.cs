@@ -1,4 +1,5 @@
 ﻿using queue_simulation_engine.InputValidator;
+using queue_simulation_engine.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +16,11 @@ namespace queue_simulation_engine.DescriptionMessages
             Console.WriteLine($"The average time it takes an order to be filled is:                     {meanOrderTime}");
             Console.WriteLine($"The average time it takes a new client to come to the store is:         {meanArrivalTime}");
             Console.WriteLine($"The average time it takes a client to get fed up with waiting is:       {meanCancellationTime}");
+        }
+
+        public static void AddHeaderRow()
+        {
+            Console.WriteLine("Time     People being served     People in line");
         }
     }
 }

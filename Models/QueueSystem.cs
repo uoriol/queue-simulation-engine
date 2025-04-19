@@ -20,6 +20,7 @@ namespace queue_simulation_engine.Models
         private Poisson ArrivalDistribution { get; }
         private Geometric OrderFullfilmentDistribution { get; }
         private Normal CancellationDistribution { get; }
+        private TimeOnly CurrentTime { get; set; }
         public QueueSystem(int nWorkers, int meanOrderTime, int meanArrivalTime, int meanCancellationTime, int stdCancellationTime) 
         {
             for (int i = 0; i < nWorkers; i++)
@@ -35,31 +36,31 @@ namespace queue_simulation_engine.Models
         public void StartDay(TimeOnly? startTime = null, TimeOnly? closingTime = null)
         {
             // We hard-code the values for now
-            TimeOnly currentTime = new TimeOnly(8, 0);
-            NextClientArrivalSimulation = currentTime.AddMinutes(ArrivalDistribution.Sample());
+            CurrentTime = new TimeOnly(8, 0);
+            NextClientArrivalSimulation = CurrentTime.AddMinutes(ArrivalDistribution.Sample());
             Console.WriteLine("The store has opened, it's 8AM.");
             closingTime = new TimeOnly(17, 0);
 
             int currentClient = 0;
 
-            while (currentTime < closingTime)
+            while (CurrentTime < closingTime)
             {
                 List<string> events = new List<string>();
-                while (NextClientArrivalSimulation == currentTime)
+                while (NextClientArrivalSimulation == CurrentTime)
                 {
-                    NextClientArrivalSimulation = CreateCustomerAndGetNewArrivalTime(currentTime, currentClient);
+                    NextClientArrivalSimulation = CreateCustomerAndGetNewArrivalTime(currentClient);
                     currentClient++;
-                    Console.WriteLine("Customer arrived");
+                    //Console.WriteLine("Customer arrived");
                 }
 
                 // First we check if any order will be fullfilled
                 foreach (var worker in WorkersList.Where(w => w.Status == WorkerStatus.Serving)) { 
-                    if(worker.IsFinishingNow(currentTime))
+                    if(worker.IsFinishingNow(CurrentTime))
                     {
                         UpdateCustomerAfterOrderCompletion((int)worker.CurrentClientId);
                         worker.FreeWorker();
                         // Add event
-                        Console.WriteLine("Customer served");
+                        //Console.WriteLine("Customer served");
                     }
                 }
 
@@ -68,9 +69,9 @@ namespace queue_simulation_engine.Models
                     // Assign customer to worker (at random)
                     do
                     {
-                        AssignCustomerToWorker(currentTime);
+                        AssignCustomerToWorker();
                         // Add event
-                        Console.WriteLine("Customer assigned");
+                        //Console.WriteLine("Customer assigned");
                     } while (AvailableWorkers && AwaitingCustomers);
                 }
 
@@ -79,40 +80,56 @@ namespace queue_simulation_engine.Models
                     // Check if customer has been fed up
                     foreach (var awaitingCustomer in AwaitingCustomersList) 
                     {
-                        if (awaitingCustomer.IsFedUp(currentTime))
+                        if (awaitingCustomer.IsFedUp(CurrentTime))
                         {
-                            awaitingCustomer.LeaveAngry();
+                            awaitingCustomer.LeaveAngry(CurrentTime);
                             // Add event
-                            Console.WriteLine("ANGRY CUSTOMER!!!");
+                            //Console.WriteLine("ANGRY CUSTOMER!!!");
                         }
                     }
                 }
-
+                //AddCurrentTimeStatusRow(this);
                 Thread.Sleep(50);
-                currentTime = currentTime.AddMinutes(1);
-                Console.WriteLine(currentTime.ToString());
+                CurrentTime = CurrentTime.AddMinutes(1);
+
+                Console.Clear();
+                Console.WriteLine(CurrentTime.ToString());
+                Console.WriteLine(" O ");
+                Console.WriteLine("---");
+                if (ActiveCustomers.Any()) {
+                    Console.WriteLine(" X ");
+                }
+                Console.WriteLine();
+                foreach (var waitingCustomer in AwaitingCustomersList) {
+                    Console.WriteLine(" X ");
+                }
             }
         }
 
-        private TimeOnly CreateCustomerAndGetNewArrivalTime(TimeOnly currentTime, int currentClient)
+        private TimeOnly CreateCustomerAndGetNewArrivalTime(int currentClient)
         {
-            NextClientArrivalSimulation = currentTime.AddMinutes(ArrivalDistribution.Sample());
-            CustomerList.Add(new Customer(currentClient++, NextClientArrivalSimulation, Math.Min((int)CancellationDistribution.Sample(), 1)));
+            NextClientArrivalSimulation = CurrentTime.AddMinutes(ArrivalDistribution.Sample());
+            CustomerList.Add(new Customer(currentClient++, NextClientArrivalSimulation, Math.Max((int)CancellationDistribution.Sample(), 1)));
             return NextClientArrivalSimulation;
         }
 
-        private void AssignCustomerToWorker(TimeOnly currentTime)
+        private void AssignCustomerToWorker()
         {
             // Move to functions
             var firstClientInLine = AwaitingCustomersList.First();
             firstClientInLine.SetAsBeingServed();
-            AvailableWorkersList.First().AssignCustomer(firstClientInLine, currentTime, OrderFullfilmentDistribution.Sample());
+            AvailableWorkersList.First().AssignCustomer(firstClientInLine, CurrentTime, OrderFullfilmentDistribution.Sample());
         }
 
         private void UpdateCustomerAfterOrderCompletion(int customerId)
         {
             var customer = ActiveCustomers.Where(c => c.Id == customerId).Single();
-            customer.Leave();
+            customer.Leave(CurrentTime);
+        }
+
+        public static void AddCurrentTimeStatusRow(QueueSystem queue)
+        {
+            Console.WriteLine($"{queue.CurrentTime}     {queue.CustomerList.Where(x => x.Status == CustomerStatus.BeingServed).Count()}       {queue.CustomerList.Where(x => x.Status == CustomerStatus.Waiting).Count()}");
         }
     }
 
@@ -137,7 +154,7 @@ namespace queue_simulation_engine.Models
 
         public bool IsFedUp(TimeOnly currentTime)
         {
-            return currentTime == ArrivalTime;
+            return currentTime == LimitTime;
         }
 
         public void SetAsBeingServed()
@@ -145,14 +162,16 @@ namespace queue_simulation_engine.Models
             Status = CustomerStatus.BeingServed;
         }
 
-        public void LeaveAngry()
+        public void LeaveAngry(TimeOnly currentTime)
         {
             Status = CustomerStatus.LeftBeforeOrderFilled;
+            ServedTime = currentTime;
         }
 
-        public void Leave()
+        public void Leave(TimeOnly currentTime)
         {
             Status = CustomerStatus.OrderFilled;
+            ServedTime = currentTime;
         }
     }
 
@@ -224,3 +243,9 @@ namespace queue_simulation_engine.Models
 // - Workers who are faster than others
 // - Times of day when people come more to the store
 // - Possibility of newcomers to leave immediately when they see a lot of people waiting in line
+
+
+// Another input by the user could be the type of console representation:
+// e.g. At each minute see the summary
+// e.g. At each minute see the events happening
+// e.g. Visual representation (with dots or squares)
