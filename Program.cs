@@ -12,5 +12,5 @@ int MeanCancellationTime = InputValidator.ReadInteger("Indicate the average time
 
 DescriptionMessages.DescribeUserInputs(NWorkers, MeanOrderTime, MeanNewArrivalTime, MeanCancellationTime);
 
-var simulation = new QueueSystem(NWorkers, MeanOrderTime, MeanNewArrivalTime, MeanCancellationTime);
+var simulation = new QueueSystem(NWorkers, MeanOrderTime, MeanNewArrivalTime, MeanCancellationTime, stdCancellationTime: 2);
 simulation.StartDay();
