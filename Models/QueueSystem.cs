@@ -32,7 +32,7 @@ namespace queue_simulation_engine.Models
         {
             // We hard-code the values for now
             TimeOnly currentTime = new TimeOnly(8, 0);
-            NextClientArrivalSimulation = currentTime;
+            NextClientArrivalSimulation = currentTime.AddMinutes(ArrivalDistribution.Sample());
             Console.WriteLine("The store has opened, it's 8AM.");
             closingTime = new TimeOnly(17, 0);
 
@@ -44,12 +44,17 @@ namespace queue_simulation_engine.Models
                 if(NextClientArrivalSimulation == currentTime)
                 {
                     NextClientArrivalSimulation = currentTime.AddMinutes(ArrivalDistribution.Sample());
+                    if (NextClientArrivalSimulation == currentTime)
+                    {
+                        // At least one more minute (we will fix this later)
+                        NextClientArrivalSimulation.AddMinutes(1);
+                    }
                     CustomerList.Add(new Customer(currentClient++, NextClientArrivalSimulation));
                     Console.WriteLine("Customer arrived");
                 }
 
                 // First we check if any order will be fullfilled
-                foreach (var worker in WorkersList) { 
+                foreach (var worker in WorkersList.Where(w => w.Status == WorkerStatus.Serving)) { 
                     if(worker.IsFinishingNow(currentTime))
                     {
                         UpdateCustomerAfterOrderCompletion((int)worker.CurrentClientId);
@@ -65,7 +70,7 @@ namespace queue_simulation_engine.Models
                     // Add event
                     do
                     {
-                        AssignCustomerToWorker();
+                        AssignCustomerToWorker(currentTime);
                         // Add event
                         Console.WriteLine("Customer assigned");
                     } while (AvailableWorkers && AwaitingCustomers);
@@ -91,12 +96,12 @@ namespace queue_simulation_engine.Models
             }
         }
 
-        public void AssignCustomerToWorker()
+        public void AssignCustomerToWorker(TimeOnly currentTime)
         {
             // Move to functions
             var firstClientInLine = AwaitingCustomersList.First();
             firstClientInLine.SetAsBeingServed();
-            AvailableWorkersList.First().AssignCustomer(firstClientInLine);
+            AvailableWorkersList.First().AssignCustomer(firstClientInLine, currentTime);
         }
 
         public void UpdateCustomerAfterOrderCompletion(int customerId)
@@ -166,10 +171,11 @@ namespace queue_simulation_engine.Models
             return Status == WorkerStatus.Serving && EndOfOrderTime == currentTime;
         }
 
-        public void AssignCustomer(Customer customer)
+        public void AssignCustomer(Customer customer, TimeOnly currentTime)
         {
             CurrentClientId = customer.Id;
             Status = WorkerStatus.Serving;
+            EndOfOrderTime = currentTime.AddMinutes(5);
         }
 
         public void FreeWorker()
